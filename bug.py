@@ -1,8 +1,8 @@
-from flask import Flask
-from flask import request
+from flask import Flask, request, current_app
 import simplejson as json
 from flask.ext.sqlalchemy import SQLAlchemy
 from datetime import datetime
+import base64
 
 """
 Create a flask app, setup SQLAlchemy
@@ -56,36 +56,81 @@ database.
 @app.route('/capture', methods=["POST"])
 def capture():
     if request.method == "POST":
+        input = result = {}
+
         # Get JSON data and deserialize it to a dictionary
         data = json.loads(request.data)
 
         # Now let's start populating the received data
-        description = data['entry']['label']
-        action = data['entry']['whatdone']
-        happened = data['entry']['whathad']
-        expected = data['entry']['whatshould']
-        security = bool(data['entry']['security'])
-        email = data['entry']['usermail']
-        browser = data['entry']['browser']
-        url = data['entry']['url']
-        screen = data['entry']['screen']
-        console_log = data['entry']['console']
-        image = data['entry']['screenshot']
+        input['description'] = data['entry']['label']
+        input['action'] = data['entry']['whatdone']
+        input['happened'] = data['entry']['whathad']
+        input['expected'] = data['entry']['whatshould']
+        input['security'] = bool(data['entry']['security'])
+        input['email'] = data['entry']['usermail']
+        input['browser'] = data['entry']['browser']
+        input['url'] = data['entry']['url']
+        input['screen'] = data['entry']['screen']
+        input['console_log'] = data['entry']['console']
+        input['image'] = data['entry']['screenshot']
+        if current_app.config.get('USEDB'):
+            response = store_to_db(input)
+            result['db'] = response
+        if current_app.config.get('BUGTRACKER'):
+            response = send_to_bugtracker(current_app.config.get('BUGTRACKER'), input)
+            result['bugtracker'] = response
+        return json.dumps(result)
 
-        # Assign the data to Bug model
-        bug = Bug(description, action, happened, expected,
-                security, email, browser, url, screen, console_log,
-                image)
-        db.session.add(bug)
+def store_to_db(data):
+    # Assign the data to Bug model
+    bug = Bug(data['description'], data['action'], data['happened'],
+            data['expected'], data['security'], data['email'], data['browser'],
+            data['url'], data['screen'], data['console_log'],
+            data['image'])
+    db.session.add(bug)
 
-        # Write to database
-        try:
-            db.session.commit()
-            response = True
-        except Exception, e:
-            print e
-            response = False
-        return json.dumps({'ok': response})
+    # Write to database
+    try:
+        db.session.commit()
+        response = True
+    except Exception, e:
+        print e
+        response = False
+    return response
+
+def send_to_bugtracker(tracker, data):
+    if tracker['service'] == 'PivotalTracker':
+        from pyvotal import PTracker
+        ptracker = PTracker(user=tracker['username'],
+                password=tracker['password'])
+        project = ptracker.projects.get(tracker['project_id'])
+        app.logger.info(project.name)
+        if project.name:
+            story = ptracker.Story()
+            story.story_type = "bug"
+            story.name = data['description']
+            story.description = "What was done: " + data['action'] + "\n"
+            story.description += "What was expected: " + data['expected'] + "\n"
+            story.description += "what happened: " + data['happened'] + "\n"
+            if data['email']:
+                story.description += "User Email: " + data['email'] + "\n"
+            story.description += "Browser: " + data['browser'] + "\n"
+            story.description += "URL: " + data['url'] + "\n"
+            if data['security']:
+                story.description += "Security Issue"
+            story.description += "Screen: " + data['screen'] + "\n"
+            if data['console_log']:
+                story.description += "Console Log: " + data['console_log'] + "\n"
+            # Image has been commented out till we can figure where to store
+            # it.
+            # story.description += "Image: " + data['image'] + "\n"
+            bug_story = project.stories.add(story)
+            if bug_story.id:
+                story = project.stories.get(bug_story.id)
+                story.add_attachment('screenshot.jpeg',
+                        base64.b64decode(data['image']))
+                return bug_story.id
+        return False
 
 """
 Flask Main
