@@ -57,11 +57,14 @@ def capture():
     Then pass the dictionary to SQLAlchemy Model to store it in the
     database.
     """
-    if request.method == "POST":
+    if request.data:
         input = result = {}
 
         # Get JSON data and deserialize it to a dictionary
-        data = json.loads(request.data)
+        try:
+            data = json.loads(request.data)
+        except Exception, e:
+            raise e
 
         # Now let's start populating the received data
         input['description'] = data['entry']['label']
@@ -88,6 +91,8 @@ def capture():
             response = send_to_bugtracker(current_app.config.get('BUGTRACKER'), input)
             result['bugtracker'] = response
         return json.dumps(result)
+    else:
+        return "Empty Response"
 
 def store_to_db(data):
     """
