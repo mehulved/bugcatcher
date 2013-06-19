@@ -3,6 +3,7 @@ import simplejson as json
 from flask.ext.sqlalchemy import SQLAlchemy
 from datetime import datetime
 import base64
+import re
 
 """
 Create a flask app, setup SQLAlchemy
@@ -72,10 +73,16 @@ def capture():
         input['url'] = data['entry']['url']
         input['screen'] = data['entry']['screen']
         input['console_log'] = data['entry']['console']
-        input['image'] = data['entry']['screenshot']
+        # Apply image fix as shown by
+        # https://github.com/sightmachine/simplecv-js/blob/master/webrtc-to-python/server.py
+        input['image'] = re.search(r'base64,(.*)',
+                data['entry']['screenshot']).group(1)
+        # If the setup is configured to use database, then store the data to
+        # the database.
         if current_app.config.get('USEDB'):
             response = store_to_db(input)
             result['db'] = response
+        # If a bugtracker is configured, then file a bug using it's API
         if current_app.config.get('BUGTRACKER'):
             response = send_to_bugtracker(current_app.config.get('BUGTRACKER'), input)
             result['bugtracker'] = response
@@ -99,37 +106,45 @@ def store_to_db(data):
     return response
 
 def send_to_bugtracker(tracker, data):
+    # If pivotal tracker is selected for bug filing, we'll use pyvotal module,
+    # which makes our task dead simple.
     if tracker['service'] == 'PivotalTracker':
         from pyvotal import PTracker
-        ptracker = PTracker(user=tracker['username'],
-                password=tracker['password'])
-        project = ptracker.projects.get(tracker['project_id'])
-        app.logger.info(project.name)
-        if project.name:
-            story = ptracker.Story()
-            story.story_type = "bug"
-            story.name = data['description']
-            story.description = "What was done: " + data['action'] + "\n"
-            story.description += "What was expected: " + data['expected'] + "\n"
-            story.description += "what happened: " + data['happened'] + "\n"
-            if data['email']:
-                story.description += "User Email: " + data['email'] + "\n"
-            story.description += "Browser: " + data['browser'] + "\n"
-            story.description += "URL: " + data['url'] + "\n"
-            if data['security']:
-                story.description += "Security Issue"
-            story.description += "Screen: " + data['screen'] + "\n"
-            if data['console_log']:
-                story.description += "Console Log: " + data['console_log'] + "\n"
-            # Image has been commented out till we can figure where to store
-            # it.
-            # story.description += "Image: " + data['image'] + "\n"
-            bug_story = project.stories.add(story)
-            if bug_story.id:
-                story = project.stories.get(bug_story.id)
-                story.add_attachment('screenshot.jpeg',
-                        base64.b64decode(data['image']))
-                return bug_story.id
+        # Authenticate with Pivotal Tracker
+        if tracker['username'] and tracker['password']:
+            ptracker = PTracker(user=tracker['username'],
+                    password=tracker['password'])
+            # Select the configured project, it is necessary to configure one else
+            # we won't know which project to select.
+            if tracker['project_id']:
+                project = ptracker.projects.get(tracker['project_id'])
+                # If the project is found then continue with filing the bug.
+                if project.name:
+                    story = ptracker.Story()
+                    story.story_type = "bug"
+                    story.name = data['description']
+                    story.description = "What was done: " + data['action'] + "\n"
+                    story.description += "What was expected: " + data['expected'] + "\n"
+                    story.description += "what happened: " + data['happened'] + "\n"
+                    if data['email']:
+                        story.description += "User Email: " + data['email'] + "\n"
+                    story.description += "Browser: " + data['browser'] + "\n"
+                    story.description += "URL: " + data['url'] + "\n"
+                    if data['security']:
+                        story.description += "Security Issue"
+                    story.description += "Screen: " + data['screen'] + "\n"
+                    if data['console_log']:
+                        story.description += "Console Log: " + data['console_log'] + "\n"
+                    # Add the above configured story.
+                    bug_story = project.stories.add(story)
+                    # If check story id, if it's there that means our story was
+                    # added.
+                    if bug_story.id:
+                        # If the story is added, attach the screenshot to it.
+                        story = project.stories.get(bug_story.id)
+                        story.add_attachment('screenshot.jpeg',
+                                base64.b64decode(data['image']))
+                        return bug_story.id
         return False
 
 """
