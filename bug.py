@@ -12,11 +12,12 @@ app = Flask(__name__)
 app.config.from_pyfile('bugs.cfg')
 db = SQLAlchemy(app)
 
-"""
-Bugs Class:
-    Contains the model of bugs database table.
-"""
+
 class Bug(db.Model):
+    """
+    Bugs Class:
+        Contains the model of bugs database table.
+    """
     __tablename__ = 'bugs'
     bug_id = db.Column('id', db.Integer, primary_key=True)
     description = db.Column(db.String(255))
@@ -47,15 +48,15 @@ class Bug(db.Model):
         self.image = image
         self.time = datetime.utcnow()
 
-"""
-Get the POST data sent by the Chrome extension and store it in
-variables.  The POST data is received in JSON format so we need to use
-simplejson to convert it into a dictionary.
-Then pass the dictionary to SQLAlchemy Model to store it in the
-database.
-"""
 @app.route('/capture', methods=["POST"])
 def capture():
+    """
+    Get the POST data sent by the Chrome extension and store it in
+    variables.  The POST data is received in JSON format so we need to use
+    simplejson to convert it into a dictionary.
+    Then pass the dictionary to SQLAlchemy Model to store it in the
+    database.
+    """
     if request.method == "POST":
         input = result = {}
 
@@ -89,6 +90,9 @@ def capture():
         return json.dumps(result)
 
 def store_to_db(data):
+    """
+    Store the input in database using SQLAlchemy
+    """
     # Assign the data to Bug model
     bug = Bug(data['description'], data['action'], data['happened'],
             data['expected'], data['security'], data['email'], data['browser'],
@@ -106,6 +110,9 @@ def store_to_db(data):
     return response
 
 def send_to_bugtracker(tracker, data):
+    """
+    File a bug in selected bug tracker, using it's API.
+    """
     # If pivotal tracker is selected for bug filing, we'll use pyvotal module,
     # which makes our task dead simple.
     if tracker['service'] == 'PivotalTracker':
