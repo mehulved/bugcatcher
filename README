@@ -1,5 +1,5 @@
 Bug Catcher
-===========
+================================
 
 A tool to capture output sent by [BugMeBack] (https://github.com/nfroidure/BugMeBack) and send it to bug tracking tools like Pivotal Tracker, Jira, FogBugs.
 
