@@ -1,7 +1,7 @@
 Bug Catcher
-================================
+===========
 
-*A tool to capture output sent by [BugMeBack](https://github.com/nfroidure/BugMeBack) and send it to bug tracking tools like Pivotal Tracker, Jira, FogBugs.*
+A tool to capture output sent by [BugMeBack] (https://github.com/nfroidure/BugMeBack) and send it to bug tracking tools like Pivotal Tracker, Jira, FogBugs.
 
 It optionally stores the reported bugs in the database. For database queries we are using SQLAlchemy. Though all databases supported by SQLAlchemy can be used, it has only been tested with PostgreSQL. If you'd like to test it with other databases then download a copy, test it and open a new issue and let me know about the compatability.
 
